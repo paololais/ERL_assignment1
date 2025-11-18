@@ -86,27 +86,27 @@
     <include>
       <uri>file:///home/paolo/gazebo_models/aruco_box</uri>
       <name>aruco_box</name>
-      <pose>2.10745 -3.16224 0.25 -0 0 0.922917</pose>
+      <pose>2.94487 -3.9155 0.25 0 0 0.838263</pose>
     </include>
     <include>
       <uri>file:///home/paolo/gazebo_models/aruco_box</uri>
       <name>aruco_box_1</name>
-      <pose>3.18703 -0.069164 0.25 -0 0 0.432878</pose>
+      <pose>3.85955 0.054074 0.25 0 0 0.181237</pose>
     </include>
     <include>
       <uri>file:///home/paolo/gazebo_models/aruco_box</uri>
       <name>aruco_box_2</name>
-      <pose>-0.178084 1.72416 0.25 -0 -0 0.196875</pose>
+      <pose>-0.298428 2.58848 0.249999 -0 0 0.138346</pose>
     </include>
     <include>
       <uri>file:///home/paolo/gazebo_models/aruco_box</uri>
       <name>aruco_box_3</name>
-      <pose>-0.837609 -3.37999 0.25 -0 -0 0.922917</pose>
+      <pose>-1.28067 -4.27479 0.25 0 0 1.11103</pose>
     </include>
     <include>
       <uri>file:///home/paolo/gazebo_models/aruco_box</uri>
       <name>aruco_box_4</name>
-      <pose>-2.13272 -1.1328 0.25 1.5708 -0 1.5708</pose>
+      <pose>-3.16518 -1.1328 0.249999 1.5708 -0 1.5708</pose>
     </include>
     <light name='sun' type='directional'>
       <pose>0 0 10 0 -0 0</pose>
