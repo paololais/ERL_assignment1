@@ -13,7 +13,7 @@ def generate_launch_description():
     pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
 
 
-    gazebo_models_path, ignore_last_dir = os.path.split(pkg_assignment1)
+    gazebo_models_path, _ = os.path.split(pkg_assignment1)
     os.environ["GZ_SIM_RESOURCE_PATH"] += os.pathsep + gazebo_models_path
 
     rviz_launch_arg = DeclareLaunchArgument(
@@ -69,7 +69,6 @@ def generate_launch_description():
         LaunchConfiguration('world')
     ])
     
-    # 2. Lancia gz_sim.launch.py direttamente
     gazebo_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py'),
@@ -120,7 +119,7 @@ def generate_launch_description():
             "/odom@nav_msgs/msg/Odometry@gz.msgs.Odometry",
             "/joint_states@sensor_msgs/msg/JointState@gz.msgs.Model",
             "/tf@tf2_msgs/msg/TFMessage@gz.msgs.Pose_V",
-            "/camera/image@sensor_msgs/msg/Image@gz.msgs.Image",
+            #"/camera/image@sensor_msgs/msg/Image@gz.msgs.Image",
             "/camera/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo",
         ],
         output="screen",
@@ -172,6 +171,6 @@ def generate_launch_description():
     launchDescriptionObject.add_action(spawn_urdf_node)
     launchDescriptionObject.add_action(gz_bridge_node)
     launchDescriptionObject.add_action(robot_state_publisher_node)
-    #launchDescriptionObject.add_action(gz_image_bridge_node)
+    launchDescriptionObject.add_action(gz_image_bridge_node)
 
     return launchDescriptionObject
