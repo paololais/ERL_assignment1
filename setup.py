@@ -32,6 +32,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'detect_aruco_node = assignment1.detect_aruco_node:main',
         ],
     },
 )
