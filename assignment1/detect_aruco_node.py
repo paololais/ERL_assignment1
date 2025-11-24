@@ -19,7 +19,7 @@ class DetectArucoNode(Node):
     Workflow:
     1. Rotate to detect all markers and store their approximate angles.
     2. Sequentially rotate to center each marker in the camera image and publish an annotated image.
-    3. Pause briefly after each marker before moving to the next.
+    3. Stop briefly after each marker before moving to the next.
     """
     def __init__(self):
         super().__init__('detect_aruco_node')
@@ -65,6 +65,9 @@ class DetectArucoNode(Node):
         self.rotation_timer = self.create_timer(0.1, self.rotate)
         
     def odom_callback(self, msg: Odometry):
+        """
+        Update current yaw from odometry message.
+        """
         orientation_q = msg.pose.pose.orientation
         _, _, yaw = euler_from_quaternion(
             [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w])
@@ -72,6 +75,9 @@ class DetectArucoNode(Node):
         self.yaw_received = True
         
     def image_callback(self, msg):
+        """
+        Processes camera images, triggering detection or centering logic based on current state.
+        """
         try:
             self.current_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         except Exception as e:
@@ -152,7 +158,9 @@ class DetectArucoNode(Node):
     # PHASE 2: Centering
     ############################################################
     def get_angular_error_to_marker(self, marker_id):
-        """Calculate shortest angular distance to marker's known position."""
+        """
+        Calculate shortest angular distance to marker's known position.
+        """
         target_angle = self.marker_angles.get(marker_id, self.current_yaw)
         error = target_angle - self.current_yaw
         # Normalize to [-pi, pi]
@@ -160,6 +168,10 @@ class DetectArucoNode(Node):
         return error
 
     def track_and_center_current_marker(self):
+        """
+        Rotate to center the current target marker. Publishes image and stops for 2 seconds when centered.
+        """
+        
         if self.current_image is None:
             return
 
@@ -197,6 +209,9 @@ class DetectArucoNode(Node):
             self.pause_timer = self.create_timer(2.0, self.advance_to_next_marker)
 
     def advance_to_next_marker(self):
+        """
+        Timer callback after centering a marker; moves to next marker or finishes.
+        """
         self.pause_timer.cancel()
         self.pause_timer = None
         
@@ -208,6 +223,9 @@ class DetectArucoNode(Node):
             self.state = "done"
 
     def publish_centered_image(self, pts):
+        """
+        Draw a circle around the centered marker and publish the image.
+        """
         cx = int(pts[:, 0].mean())
         cy = int(pts[:, 1].mean())
         out = self.current_image.copy()
