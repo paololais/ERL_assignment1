@@ -4,6 +4,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge
 from nav_msgs.msg import Odometry
 from tf_transformations import euler_from_quaternion
@@ -28,7 +29,9 @@ class DetectArucoNode(Node):
         self.image_pub = self.create_publisher(Image, '/aruco_centered_image', 10)
 
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
-        self.create_subscription(Image, '/camera/image', self.image_callback, 10)
+        #self.create_subscription(Image, '/camera/image', self.image_callback, 10)
+        self.create_subscription(CompressedImage, '/camera/image/compressed', self.image_callback, 10)
+        #self.create_subscription(CompressedImage, '/camera/rgb/image_raw/compressed', self.image_callback, 10)
 
         self.bridge = CvBridge()
         self.aruco_dict = aruco.Dictionary_get(aruco.DICT_ARUCO_ORIGINAL)
@@ -79,7 +82,8 @@ class DetectArucoNode(Node):
         Processes camera images, triggering detection or centering logic based on current state.
         """
         try:
-            self.current_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            # self.current_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            self.current_image = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
         except Exception as e:
             self.get_logger().warn(f"cv_bridge conversion failed: {e}")
             return
@@ -183,7 +187,7 @@ class DetectArucoNode(Node):
             # Use known marker angle to search more efficiently
             angle_error = self.get_angular_error_to_marker(self.current_target)
             twist = Twist()
-            twist.angular.z = 0.25 if angle_error > 0 else -0.25
+            twist.angular.z = self.angular_speed if angle_error > 0 else -self.angular_speed
             self.cmd_vel_pub.publish(twist)
             return
 

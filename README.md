@@ -9,14 +9,14 @@ It implements a ROS2 node that enables a mobile robot to autonomously:
 1. Rotate 360° to detect all ArUco markers in the environment.  
 2. Keep track of the IDs and angular positions of the markers.  
 3. Move toward the marker with the **lowest ID**.  
-4. Center the marker in the camera image, annotate it, and publish the result.  
+4. Center the marker in the camera image, annotate it and publish the result.  
 5. Repeat the behavior for all remaining markers in **ascending ID order**.
 
 The package was originally tested using **ROS2 Humble** on **Ubuntu 22.04**, but it can be easily adapted to other ROS2 distributions.
 
 ---
 
-## World
+### World
 The file `aruco_world.sdf` defines an environment containing **five ArUco markers**.
 
 ### Marker Generation
