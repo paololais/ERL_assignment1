@@ -65,8 +65,13 @@ class DetectArucoNode(Node):
             rclpy.spin_once(self, timeout_sec=0.1)
 
         self.get_logger().info("Starting 360° rotation")
-        self.rotation_timer = self.create_timer(0.1, self.rotate)
         
+        # Create FSM timer to handle state updates
+        self.fsm_timer = self.create_timer(0.1, self.update_fsm)
+    
+    ##############################################################
+    # Callbacks
+    ##############################################################
     def odom_callback(self, msg: Odometry):
         """
         Update current yaw from odometry message.
@@ -79,7 +84,7 @@ class DetectArucoNode(Node):
         
     def image_callback(self, msg):
         """
-        Processes camera images, triggering detection or centering logic based on current state.
+        Processes camera images. 
         """
         try:
             # self.current_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -87,26 +92,28 @@ class DetectArucoNode(Node):
         except Exception as e:
             self.get_logger().warn(f"cv_bridge conversion failed: {e}")
             return
-
+    
+    #############################################################
+    # Finite State Machine (FSM) Methods
+    #############################################################
+    def update_fsm(self):
+        """
+        FSM timer callback.
+        """
         if self.state == "rotating":
-            self.detect_markers()
+            self.update_rotating_state()
         elif self.state == "centering":
-            # Skip processing if in pause after centering a marker
-            if self.pause_timer is None:
-                self.track_and_center_current_marker()
+            self.update_centering_state()
         elif self.state == "done":
-            self.cmd_vel_pub.publish(Twist())
-    
-    ############################################################
-    # PHASE 1: Rotation
-    ############################################################
-    
-    def rotate(self):
+            self.update_done_state()
+
+    def update_rotating_state(self):
         """
-        Rotates the robot to detect all markers. Stops if all markers found.
+        Handle rotation phase: detect markers and rotate until complete.
         """
-        if self.state != "rotating":
-            return
+        # Detect markers in current image
+        if self.current_image is not None:
+            self.detect_markers()
         
         # Early exit if all markers found
         if len(self.detected_ids) == 5:
@@ -122,14 +129,33 @@ class DetectArucoNode(Node):
         delta_yaw = self.current_yaw - self.prev_yaw
         delta_yaw = (delta_yaw + math.pi) % (2 * math.pi) - math.pi
         self.total_rotated += abs(delta_yaw)
-        self.prev_yaw = self.current_yaw        
-    
+        self.prev_yaw = self.current_yaw
+
+    def update_centering_state(self):
+        """
+        Handle centering phase: track and center current marker.
+        Skip if in pause after centering.
+        """
+        if self.pause_timer is not None:
+            return
+        
+        if self.current_image is not None:
+            self.track_and_center_current_marker()
+
+    def update_done_state(self):
+        """
+        Handle done phase: stop all motion.
+        """
+        self.cmd_vel_pub.publish(Twist())
+        
+    ##############################################################
+    # Helper Methods
+    ##############################################################
     def stop_rotation(self):
         """
         Stops rotation and transitions to centering phase.
         """
         self.cmd_vel_pub.publish(Twist())
-        self.rotation_timer.cancel()
         
         # Transition to centering phase
         self.target_list = sorted(list(self.detected_ids))
@@ -158,9 +184,6 @@ class DetectArucoNode(Node):
                     self.marker_angles[m_id] = self.current_yaw
                     self.get_logger().info(f"Found marker ID {m_id} at angle {math.degrees(self.current_yaw):.1f}°")
 
-    ############################################################
-    # PHASE 2: Centering
-    ############################################################
     def get_angular_error_to_marker(self, marker_id):
         """
         Calculate shortest angular distance to marker's known position.
