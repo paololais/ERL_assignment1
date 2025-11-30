@@ -11,6 +11,7 @@ from tf_transformations import euler_from_quaternion
 import cv2
 import cv2.aruco as aruco
 import math
+from collections import deque
 
 
 class DetectArucoNode(Node):
@@ -59,6 +60,13 @@ class DetectArucoNode(Node):
         self.current_target = None
         self.last_published_id = None
         self.pause_timer = None
+        
+        self.center_history = deque(maxlen=5)   # smoothing buffer for cx
+        self.REQUIRED_CONSECUTIVE = 3           # frames required to confirm centered
+        self.centered_counts = {}               # counts per marker id
+        self.controller_gain = 0.0015           # P gain (tuneable)
+        self.max_angular = 0.45                 # clamp for angular speed (rad/s)
+        self.center_deadband = 5                # pixels tolerance
 
         self.get_logger().info("Waiting for odometry...")
         while not self.yaw_received:
@@ -175,7 +183,7 @@ class DetectArucoNode(Node):
             return
 
         gray = cv2.cvtColor(self.current_image, cv2.COLOR_BGR2GRAY)
-        corners, ids, _ = aruco.detectMarkers(gray, self.aruco_dict, parameters=self.aruco_params)
+        _, ids, _ = aruco.detectMarkers(gray, self.aruco_dict, parameters=self.aruco_params)
 
         if ids is not None:
             for m_id in ids.flatten():
@@ -196,44 +204,80 @@ class DetectArucoNode(Node):
 
     def track_and_center_current_marker(self):
         """
-        Rotate to center the current target marker. Publishes image and stops for 2 seconds when centered.
+        Rotate to center the current target marker. Uses:
+        - robust index lookup for target
+        - smoothing on cx via moving average
+        - consecutive-frame confirmation before declaring centered to avoid false positives
         """
-        
         if self.current_image is None:
             return
 
         gray = cv2.cvtColor(self.current_image, cv2.COLOR_BGR2GRAY)
         corners, ids, _ = aruco.detectMarkers(gray, self.aruco_dict, parameters=self.aruco_params)
 
-        # Search for target if not visible
+        # If the target is not visible, search using known angle
         if ids is None or self.current_target not in ids.flatten():
             # Use known marker angle to search more efficiently
             angle_error = self.get_angular_error_to_marker(self.current_target)
             twist = Twist()
             twist.angular.z = self.angular_speed if angle_error > 0 else -self.angular_speed
+            # publish a limited (safe) angular velocity
+            twist.angular.z = max(min(twist.angular.z, self.max_angular), -self.max_angular)
             self.cmd_vel_pub.publish(twist)
+            # clear smoothing so old values don't affect future centering
+            self.center_history.clear()
             return
 
-        # Target found - center it
-        idx = list(ids.flatten()).index(self.current_target)
-        pts = corners[idx][0]
+        # Find the index corresponding to current_target safely
+        ids_flat = ids.flatten()
+        idxs = [i for i, val in enumerate(ids_flat) if val == self.current_target]
+        if not idxs:
+            # somehow not found, fallback to search behavior
+            angle_error = self.get_angular_error_to_marker(self.current_target)
+            twist = Twist()
+            twist.angular.z = self.angular_speed if angle_error > 0 else -self.angular_speed
+            twist.angular.z = max(min(twist.angular.z, self.max_angular), -self.max_angular)
+            self.cmd_vel_pub.publish(twist)
+            self.center_history.clear()
+            return
 
+        idx = idxs[0]
+        pts = corners[idx][0]   # shape (4,2)
+
+        # compute cx and smooth it
         img_w = gray.shape[1]
-        cx = pts[:, 0].mean()
-        error_x = cx - (img_w / 2)
+        cx = float(pts[:, 0].mean())
+        self.center_history.append(cx)
+        smooth_cx = sum(self.center_history) / len(self.center_history)
 
+        error_x = smooth_cx - (img_w / 2)
+
+        # P controller with clamp
         twist = Twist()
-        twist.angular.z = -0.003 * error_x
+        twist.angular.z = -self.controller_gain * error_x
+        # limit angular speed
+        twist.angular.z = max(min(twist.angular.z, self.max_angular), -self.max_angular)
         self.cmd_vel_pub.publish(twist)
 
-        # Marker centered
-        if abs(error_x) < 5:
+        # consecutive-frame confirmation before declaring centered
+        if abs(error_x) < self.center_deadband:
+            self.centered_counts[self.current_target] = self.centered_counts.get(self.current_target, 0) + 1
+        else:
+            self.centered_counts[self.current_target] = 0
+
+        if self.centered_counts[self.current_target] >= self.REQUIRED_CONSECUTIVE:
+            # publish only once per marker
             if self.last_published_id != self.current_target:
                 self.publish_centered_image(pts)
                 self.last_published_id = self.current_target
 
+            # stop rotation and set a pause before moving to next
             self.cmd_vel_pub.publish(Twist())
+            # reset counter and smoothing buffer (clean state)
+            self.centered_counts[self.current_target] = 0
+            self.center_history.clear()
             self.pause_timer = self.create_timer(2.0, self.advance_to_next_marker)
+
 
     def advance_to_next_marker(self):
         """
@@ -251,16 +295,28 @@ class DetectArucoNode(Node):
 
     def publish_centered_image(self, pts):
         """
-        Draw a circle around the centered marker and publish the image.
+        Draws and publishes an image with:
+        - Circle passing through all 4 marker corners
+        - Marker ID label
         """
-        cx = int(pts[:, 0].mean())
-        cy = int(pts[:, 1].mean())
         out = self.current_image.copy()
-        
-        cv2.circle(out, (cx, cy), 20, (0, 255, 0), 3)
+
+        # Compute center of marker
+        center = pts.mean(axis=0)
+        cx, cy = int(center[0]), int(center[1])
+
+        # Compute radius so circle covers all 4 corners
+        dists = [math.dist((cx, cy), (p[0], p[1])) for p in pts]
+        radius = int(max(dists))
+
+        # Draw circle around marker
+        cv2.circle(out, (cx, cy), radius, (0, 0, 255), 2)
+
+        # Write marker ID on image
         text = f"MarkerID = {self.current_target}"
         cv2.putText(out, text, (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3, cv2.LINE_AA)
 
+        # Publish image
         msg = self.bridge.cv2_to_imgmsg(out, encoding="bgr8")
         self.image_pub.publish(msg)
         self.get_logger().info(f"Published centered image for marker {self.current_target}")
