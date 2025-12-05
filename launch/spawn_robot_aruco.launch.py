@@ -32,7 +32,7 @@ def generate_launch_description():
     )
 
     model_arg = DeclareLaunchArgument(
-        'model', default_value='mogi_bot.urdf',
+        'model', default_value='mogi_bot_4wheels.urdf',
         description='Name of the URDF description to load'
     )
 
@@ -154,6 +154,13 @@ def generate_launch_description():
              'camera.image.compressed.jpeg_quality': 75},
         ],
     )
+    
+    detect_aruco_node = Node(
+        package='assignment1',
+        executable='detect_aruco_node',
+        prefix=['xterm -e '],
+        output='screen'
+    )
 
     launchDescriptionObject = LaunchDescription()
 
@@ -171,5 +178,6 @@ def generate_launch_description():
     launchDescriptionObject.add_action(gz_bridge_node)
     launchDescriptionObject.add_action(robot_state_publisher_node)
     launchDescriptionObject.add_action(gz_image_bridge_node)
+    #launchDescriptionObject.add_action(detect_aruco_node)
 
     return launchDescriptionObject

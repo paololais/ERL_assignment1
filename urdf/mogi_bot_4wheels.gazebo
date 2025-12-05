@@ -43,6 +43,16 @@
       <joint_name>back_right_wheel_joint</joint_name>
       <joint_name>front_right_wheel_joint</joint_name>
     </plugin>
+
+    <plugin filename="libignition-gazebo6-odometry-publisher-system.so"
+      name="ignition::gazebo::systems::OdometryPublisher">
+            <odom_topic>odom</odom_topic>
+            <tf_topic>tf</tf_topic>
+            <frame_id>odom</frame_id>
+            <child_frame_id>base_footprint</child_frame_id>
+            <odom_publish_frequency>30</odom_publish_frequency>
+            <dimensions>3</dimensions>
+      </plugin>
   </gazebo>
   
   <gazebo reference="camera_link">

@@ -46,7 +46,7 @@ class DetectArucoNode(Node):
         self.state = "rotating"
         
         # Rotation
-        self.angular_speed = 0.25
+        self.angular_speed = 0.2
         self.total_rotated = 0.0
         self.prev_yaw = 0.0
         
@@ -65,8 +65,8 @@ class DetectArucoNode(Node):
         self.REQUIRED_CONSECUTIVE = 3           # frames required to confirm centered
         self.centered_counts = {}               # counts per marker id
         self.controller_gain = 0.0015           # P gain (tuneable)
-        self.max_angular = 0.45                 # clamp for angular speed (rad/s)
-        self.center_deadband = 5                # pixels tolerance
+        self.max_angular = 0.3                 # clamp for angular speed (rad/s)
+        self.center_deadband = 10             # pixels tolerance
 
         self.get_logger().info("Waiting for odometry...")
         while not self.yaw_received:
