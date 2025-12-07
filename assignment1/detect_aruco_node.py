@@ -64,9 +64,9 @@ class DetectArucoNode(Node):
         self.center_history = deque(maxlen=5)   # smoothing buffer for cx
         self.REQUIRED_CONSECUTIVE = 3           # frames required to confirm centered
         self.centered_counts = {}               # counts per marker id
-        self.controller_gain = 0.0015           # P gain (tuneable)
-        self.max_angular = 0.3                 # clamp for angular speed (rad/s)
-        self.center_deadband = 10             # pixels tolerance
+        self.controller_gain = 0.0005           # P gain
+        self.max_angular = 0.15                 # clamp for angular speed (rad/s)
+        self.center_deadband = 10               # pixels tolerance
 
         self.get_logger().info("Waiting for odometry...")
         while not self.yaw_received:
