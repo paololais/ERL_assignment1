@@ -80,6 +80,15 @@ The node first performs a 360° rotation to detect all markers and record their 
 
 After all markers are centered and published, the node stops.
 
+## Demo videos
+### Simulation
+https://github.com/user-attachments/assets/0d2db3d4-ed0b-4b45-ab71-1c68f5bfad79
+
+### ROSbot
+https://github.com/user-attachments/assets/d2fc025d-0b7e-4faf-9c57-9905e7488a49
+
+https://github.com/user-attachments/assets/50043d18-ff26-487b-8ceb-12a889978c09
+
 ## Installation
 - Clone the package inside your ROS2 workspace src folder:
 ```bash
