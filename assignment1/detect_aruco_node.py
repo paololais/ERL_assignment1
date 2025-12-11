@@ -30,9 +30,7 @@ class DetectArucoNode(Node):
         self.image_pub = self.create_publisher(Image, '/aruco_centered_image', 10)
 
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
-        #self.create_subscription(Image, '/camera/image', self.image_callback, 10)
         self.create_subscription(CompressedImage, '/camera/image/compressed', self.image_callback, 10)
-        #self.create_subscription(CompressedImage, '/camera/rgb/image_raw/compressed', self.image_callback, 10)
 
         self.bridge = CvBridge()
         self.aruco_dict = aruco.Dictionary_get(aruco.DICT_ARUCO_ORIGINAL)
