@@ -30,9 +30,7 @@ class DetectArucoNode(Node):
         self.image_pub = self.create_publisher(Image, '/aruco_centered_image', 10)
 
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
-        #self.create_subscription(Image, '/camera/image', self.image_callback, 10)
-        self.create_subscription(CompressedImage, '/camera/image/compressed', self.image_callback, 10)
-        #self.create_subscription(CompressedImage, '/camera/rgb/image_raw/compressed', self.image_callback, 10)
+        self.create_subscription(CompressedImage, '/camera/rgb/image_raw/compressed', self.image_callback, 10)
 
         self.bridge = CvBridge()
         self.aruco_dict = aruco.Dictionary_get(aruco.DICT_ARUCO_ORIGINAL)
@@ -53,6 +51,7 @@ class DetectArucoNode(Node):
         # Markers found during rotation
         self.detected_ids = set()
         self.marker_angles = {}  # Store angular position of each marker
+        self.marker_scores = {} # Store centering score
         self.target_list = []
         
         # Current image
@@ -177,20 +176,36 @@ class DetectArucoNode(Node):
     
     def detect_markers(self):
         """
-        Detects ArUco markers in the current image and stores their IDs and approximate angles.
+        Detect ArUco markers and update their best observed angles and scores.
         """
         if self.current_image is None:
             return
 
         gray = cv2.cvtColor(self.current_image, cv2.COLOR_BGR2GRAY)
-        _, ids, _ = aruco.detectMarkers(gray, self.aruco_dict, parameters=self.aruco_params)
+        corners, ids, _ = aruco.detectMarkers(gray, self.aruco_dict, parameters=self.aruco_params)
+        
+        img_center_x = gray.shape[1] / 2.0
 
         if ids is not None:
-            for m_id in ids.flatten():
-                if m_id not in self.detected_ids:
-                    self.detected_ids.add(m_id)
-                    self.marker_angles[m_id] = self.current_yaw
-                    self.get_logger().info(f"Found marker ID {m_id} at angle {math.degrees(self.current_yaw):.1f}°")
+            ids_flat = ids.flatten()
+            for i, m_id in enumerate(ids_flat):
+                if m_id in [10, 12, 14, 16, 18]: # only consider our markers to avoid noise
+                    
+                    # Calculate the center of the marker in the image
+                    c = corners[i][0]
+                    cx = c[:, 0].mean()
+                    
+                    # Calculate how far it is from the image center (lower score = better)
+                    dist_from_center = abs(cx - img_center_x)
+                    
+                    # if this is the best score so far, update records
+                    current_score = self.marker_scores.get(m_id, float('inf'))
+                    
+                    if dist_from_center < current_score:
+                        self.marker_scores[m_id] = dist_from_center
+                        self.marker_angles[m_id] = self.current_yaw
+                        self.detected_ids.add(m_id)
+                        self.get_logger().info(f"Updated marker {m_id} pose. Score: {dist_from_center:.1f}")
 
     def get_angular_error_to_marker(self, marker_id):
         """
@@ -203,34 +218,41 @@ class DetectArucoNode(Node):
         return error
 
     def track_and_center_current_marker(self):
-        """
-        Rotate to center the current target marker. Uses:
-        - robust index lookup for target
-        - smoothing on cx via moving average
-        - consecutive-frame confirmation before declaring centered to avoid false positives
-        """
         if self.current_image is None:
             return
 
         gray = cv2.cvtColor(self.current_image, cv2.COLOR_BGR2GRAY)
         corners, ids, _ = aruco.detectMarkers(gray, self.aruco_dict, parameters=self.aruco_params)
 
-        # If the target is not visible, search using known angle
+        # Phase 1: Marker not visible - rotate to find it
         if ids is None or self.current_target not in ids.flatten():
-            # Use known marker angle to search more efficiently
             angle_error = self.get_angular_error_to_marker(self.current_target)
+            
             twist = Twist()
-            twist.angular.z = self.angular_speed if angle_error > 0 else -self.angular_speed
-            # publish a limited (safe) angular velocity
-            twist.angular.z = max(min(twist.angular.z, self.max_angular), -self.max_angular)
+            search_gain = 2.0  
+            cmd_vel = search_gain * angle_error
+            
+            min_scan_speed = 0.2
+            
+            # Anti-blocking: ensure minimum rotation speed by forcing min speed
+            if abs(cmd_vel) < min_scan_speed:
+                if angle_error >= 0:
+                    cmd_vel = min_scan_speed
+                else:
+                    cmd_vel = -min_scan_speed
+
+            twist.angular.z = cmd_vel
+            # Clamp angular speed
+            twist.angular.z = max(min(twist.angular.z, self.angular_speed), -self.angular_speed)
+            
             self.cmd_vel_pub.publish(twist)
-            # clear smoothing so old values don't affect future centering
             self.center_history.clear()
             return
 
-        # Find the index corresponding to current_target safely
+       # Phase 2: Marker visible - center it
         ids_flat = ids.flatten()
         idxs = [i for i, val in enumerate(ids_flat) if val == self.current_target]
+        
         if not idxs:
             # somehow not found, fallback to search behavior
             angle_error = self.get_angular_error_to_marker(self.current_target)
